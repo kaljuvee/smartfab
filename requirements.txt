@@ -11,3 +11,4 @@ openai
 python-dotenv
 tabulate
 shap
+pycaret
