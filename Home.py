@@ -8,6 +8,7 @@ from catboost import CatBoostClassifier
 from sklearn.preprocessing import LabelEncoder
 import plotly.express as px
 import shap
+import numpy as np
 
 # Function to encode non-numeric columns
 def encode_columns(df):
@@ -64,12 +65,24 @@ if uploaded_file is not None:
         f1 = f1_score(y_test, y_pred)
         report = classification_report(y_test, y_pred, output_dict=True)
 
+        # Convert classification report to DataFrame
+        metrics = {
+            "Accuracy": accuracy,
+            "AUC": auc,
+            "F1 Score": f1
+        }
+
+        for key, value in report.items():
+            if isinstance(value, dict):
+                for metric, score in value.items():
+                    metrics[f"{key} {metric}"] = score
+            else:
+                metrics[key] = value
+
+        report_df = pd.DataFrame(list(metrics.items()), columns=['Metric', 'Value'])
+
         st.write("Model Performance Metrics:")
-        st.write(f"Accuracy: {accuracy}")
-        st.write(f"AUC: {auc}")
-        st.write(f"F1 Score: {f1}")
-        st.write("Classification Report:")
-        st.write(report)
+        st.write(report_df)
 
         # Feature importance
         if hasattr(model, 'feature_importances_'):
@@ -88,25 +101,40 @@ if uploaded_file is not None:
             X_train = st.session_state['X_train']
             X_test = st.session_state['X_test']
 
-            # Choose the appropriate SHAP explainer based on the model type
-            if isinstance(model, AdaBoostClassifier):
-                explainer = shap.KernelExplainer(model.predict_proba, shap.sample(X_train, 100))
-                shap_values = explainer.shap_values(X_test[:100])  # Limit to 100 samples for performance
-            elif isinstance(model, CatBoostClassifier):
-                explainer = shap.TreeExplainer(model)
-                shap_values = explainer.shap_values(X_test)
-            elif isinstance(model, DecisionTreeClassifier):
-                explainer = shap.TreeExplainer(model)
-                shap_values = explainer.shap_values(X_test)
-            else:
-                st.error("Unsupported model type for SHAP analysis")
+            try:
+                # Choose the appropriate SHAP explainer based on the model type
+                if isinstance(model, AdaBoostClassifier):
+                    explainer = shap.KernelExplainer(model.predict_proba, shap.sample(X_train, 100))
+                    shap_values = explainer.shap_values(X_test[:100])  # Limit to 100 samples for performance
+                    plot_data = X_test[:100]
+                elif isinstance(model, CatBoostClassifier):
+                    explainer = shap.TreeExplainer(model)
+                    shap_values = explainer.shap_values(X_test)
+                    plot_data = X_test
+                elif isinstance(model, DecisionTreeClassifier):
+                    explainer = shap.TreeExplainer(model)
+                    shap_values = explainer.shap_values(X_test)
+                    plot_data = X_test
+                else:
+                    st.error("Unsupported model type for SHAP analysis")
 
-            st.write("SHAP summary plot:")
-            if isinstance(model, AdaBoostClassifier):
-                shap.summary_plot(shap_values[1], X_test[:100], plot_type="bar", show=False)
-            else:
-                shap.summary_plot(shap_values, X_test, plot_type="bar", show=False)
-            st.pyplot(bbox_inches='tight')
+                st.write("SHAP summary plot:")
+                if isinstance(model, AdaBoostClassifier):
+                    # For binary classification, we use the second class's SHAP values
+                    shap.summary_plot(shap_values[1], plot_data, plot_type="bar", show=False)
+                elif isinstance(model, (CatBoostClassifier, DecisionTreeClassifier)):
+                    # For multi-class, we sum the absolute values across all classes
+                    shap_values_sum = np.abs(shap_values).sum(axis=0)
+                    shap.summary_plot(shap_values_sum, plot_data, plot_type="bar", show=False)
+                
+                st.pyplot(bbox_inches='tight')
+
+            except Exception as e:
+                st.error(f"An error occurred during SHAP analysis: {str(e)}")
+                st.error("Please try a different model or dataset.")
+
+        # ... (rest of the SHAP interpretation code)
+
             st.markdown("""
                 ## Interpreting SHAP Results
                 - **Feature Importance**: The SHAP summary plot shows the importance of each feature in making predictions. Features are listed on the y-axis, and their importance is shown on the x-axis.

@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import os
-import json
 from langchain.agents import AgentType
 from langchain_experimental.agents.agent_toolkits import create_pandas_dataframe_agent
 from langchain_community.callbacks.streamlit import StreamlitCallbackHandler
@@ -53,7 +52,7 @@ if uploaded_file is not None:
             pandas_df_agent = create_pandas_dataframe_agent(
                 llm,
                 df,
-                verbose=True,
+                verbose=False,  # Set verbose to False to avoid detailed execution messages
                 agent_type=AgentType.OPENAI_FUNCTIONS,
                 handle_parsing_errors=True,
                 allow_dangerous_code=True  # Allow dangerous code execution
@@ -63,7 +62,10 @@ if uploaded_file is not None:
             with st.chat_message("assistant"):
                 st_cb = StreamlitCallbackHandler(st.container(), expand_new_thoughts=False)
                 
-                response = pandas_df_agent.run(question, callbacks=[st_cb])
+                try:
+                    response = pandas_df_agent.run(question, callbacks=[st_cb])
+                except Exception as e:
+                    response = str(e)
                 
                 st.session_state.messages.append({"role": "assistant", "content": response})
                 st.write(response)
@@ -78,9 +80,9 @@ if uploaded_file is not None:
 
         # Sample questions
         sample_questions = [
-            "What is the largest value in the column MODEL?", 
-            "What is the standard deviation in column WEIGHT?", 
-            "Give me the min and max values in the column BILANCELLE/ASSALE",
+            "How many unique values are there in the MODEL column?", 
+            "How many rows are there total in this data set?", 
+            "Give me the standard deviation, min and max values in the column BILANCELLE/ASSALE",
             "How many unique values are there in the column TEAM_LOAD?",
             "What is the total count of TRUE values in the column BIL_PREVIOUS_EMPTY?"
         ]
