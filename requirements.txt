@@ -12,3 +12,4 @@ python-dotenv
 tabulate
 shap
 pycaret
+matplotlib
