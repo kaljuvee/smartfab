@@ -5,7 +5,8 @@ import matplotlib.pyplot as plt
 import os
 
 # Streamlit app title
-st.title("SmartFAB- Model Analytics")
+st.title("SmartFAB - Model Analytics")
+st.set_option('deprecation.showPyplotGlobalUse', False)
 
 # File uploader
 uploaded_file = st.file_uploader("Upload your CSV file", type=["csv"])
@@ -82,3 +83,12 @@ if uploaded_file is not None:
                     os.remove("SHAP Summary.png")
         else:
             st.error("Please create a model first.")
+
+        # SHAP interpretation guide
+        st.markdown("""
+        ## Interpreting SHAP Results
+        - **Feature Importance**: The SHAP summary plot shows the importance of each feature in making predictions. Features are listed on the y-axis, and their importance is shown on the x-axis.
+        - **Color Indication**: The colors represent the feature values. Red indicates higher values, while blue indicates lower values.
+        - **Impact on Prediction**: The horizontal location shows whether the effect of that value is associated with a higher or lower prediction.
+        - **Feature Effect**: If the dots for a feature are spread out horizontally, it means that feature has a larger impact on the prediction. Conversely, if they are clustered near zero, that feature has little effect on the prediction.
+        """)
