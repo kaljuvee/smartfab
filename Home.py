@@ -9,6 +9,9 @@ from sklearn.preprocessing import LabelEncoder
 import plotly.express as px
 import shap
 import numpy as np
+from sklearn.inspection import permutation_importance
+from sklearn.feature_selection import RFE
+from sklearn.feature_selection import mutual_info_classif
 
 # Function to encode non-numeric columns
 def encode_columns(df):
@@ -58,7 +61,9 @@ if uploaded_file is not None:
         st.session_state['trained_model'] = model
         st.session_state['X_train'] = X_train
         st.session_state['X_test'] = X_test
-
+        st.session_state['y_train'] = y_train
+        st.session_state['y_test'] = y_test
+        
         # Performance metrics
         accuracy = accuracy_score(y_test, y_pred)
         auc = roc_auc_score(y_test, y_pred)
@@ -84,11 +89,78 @@ if uploaded_file is not None:
         st.write("Model Performance Metrics:")
         st.write(report_df)
 
-        # Feature importance
-        if hasattr(model, 'feature_importances_'):
-            importances = model.feature_importances_
-            feature_names = X.columns
-            feature_importances = pd.DataFrame(importances, index=feature_names, columns=["Importance"]).sort_values("Importance", ascending=False)
+    if st.button("Analyze Feature Importance"):
+        if 'trained_model' not in st.session_state:
+            st.error("Please train the model first.")
+        else:
+            model = st.session_state['trained_model']
+            X_train = st.session_state['X_train']
+            X_test = st.session_state['X_test']
+            y_train = st.session_state['y_train']
+            y_test = st.session_state['y_test']
+            
+            st.subheader("Feature Importance Analysis")
 
-            fig = px.bar(feature_importances, x=feature_importances.index, y='Importance', title='Feature Importance')
+            # 1. Built-in Feature Importance
+            if hasattr(model, 'feature_importances_'):
+                importances = model.feature_importances_
+                feature_names = X_train.columns
+                feature_importances = pd.DataFrame(importances, index=feature_names, columns=["Importance"]).sort_values("Importance", ascending=False)
+
+                fig = px.bar(feature_importances, x=feature_importances.index, y='Importance', title='Built-in Feature Importance')
+                st.plotly_chart(fig)
+
+                st.markdown("""
+                **Interpreting Built-in Feature Importance:**
+                - X-axis: Feature names
+                - Y-axis: Importance score (0 to 1)
+                - Higher bars indicate more important features in the model's decision-making process.
+                - This method is specific to the model type (e.g., mean decrease in impurity for tree-based models).
+                - Features are ranked based on their contribution to the model's predictions.
+                """)
+
+            # 2. Permutation Importance
+            perm_importance = permutation_importance(model, X_test, y_test, n_repeats=10, random_state=42)
+            perm_importances = pd.DataFrame({'Feature': X_test.columns, 'Importance': perm_importance.importances_mean}).sort_values('Importance', ascending=False)
+            
+            fig = px.bar(perm_importances, x='Feature', y='Importance', title='Permutation Importance')
             st.plotly_chart(fig)
+            st.markdown("""
+            **Interpreting Permutation Importance:**
+            - X-axis: Feature names
+            - Y-axis: Importance score (decrease in model performance when the feature is permuted)
+            - Higher bars indicate features that, when randomly shuffled, cause a larger decrease in model performance.
+            - This method is model-agnostic and can capture both linear and non-linear relationships.
+            - It measures the impact of each feature on model performance, not just its presence in the model.
+            """)
+            # 3. Recursive Feature Elimination
+            rfe = RFE(estimator=model, n_features_to_select=1)
+            rfe.fit(X_train, y_train)
+            rfe_importances = pd.DataFrame({'Feature': X_train.columns, 'RFE Ranking': rfe.ranking_}).sort_values('RFE Ranking')
+            
+            fig = px.bar(rfe_importances, x='Feature', y='RFE Ranking', title='Recursive Feature Elimination Ranking')
+            st.plotly_chart(fig)
+            st.markdown("""
+            **Interpreting Recursive Feature Elimination (RFE) Ranking:**
+            - X-axis: Feature names
+            - Y-axis: RFE Ranking (lower is better)
+            - Features with lower ranking (shorter bars) are considered more important.
+            - RFE recursively removes features and ranks them based on when they were eliminated.
+            - Rank 1 indicates the most important feature, with higher ranks being less important.
+            - This method considers feature dependencies and can capture complex relationships.
+            """)
+            # 4. Mutual Information
+            mi_scores = mutual_info_classif(X_train, y_train)
+            mi_df = pd.DataFrame({'Feature': X_train.columns, 'Mutual Information': mi_scores}).sort_values('Mutual Information', ascending=False)
+            
+            fig = px.bar(mi_df, x='Feature', y='Mutual Information', title='Mutual Information Feature Importance')
+            st.plotly_chart(fig)
+            st.markdown("""
+            **Interpreting Mutual Information:**
+            - X-axis: Feature names
+            - Y-axis: Mutual Information score (0 to 1)
+            - Higher bars indicate stronger statistical dependency between the feature and the target variable.
+            - Mutual Information measures how much information the presence/absence of a feature contributes to making the correct prediction on the target variable.
+            - It can capture non-linear relationships but doesn't account for feature interactions.
+            - A score of 0 means the feature and target are independent, while higher scores indicate stronger relationships.
+            """)

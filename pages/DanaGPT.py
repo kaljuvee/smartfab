@@ -37,7 +37,7 @@ if uploaded_file is not None:
     df = read_df(uploaded_file)
     if df is not None:
         st.write("Data Preview:")
-        st.write(df.head())
+        st.write(df)
 
         # Function to process a question
         def process_question(question):
@@ -64,11 +64,13 @@ if uploaded_file is not None:
                 
                 try:
                     response = pandas_df_agent.run(question, callbacks=[st_cb])
+                    # Filter out the unwanted line
+                    filtered_response = "\n".join(line for line in response.split("\n") if not line.startswith("python_repl_ast:"))
                 except Exception as e:
-                    response = str(e)
+                    filtered_response = str(e)
                 
-                st.session_state.messages.append({"role": "assistant", "content": response})
-                st.write(response)
+                st.session_state.messages.append({"role": "assistant", "content": filtered_response})
+                st.write(filtered_response)
 
         # Initialize or clear conversation history
         if "messages" not in st.session_state or st.sidebar.button("Clear conversation history"):
