@@ -46,7 +46,7 @@ else:
 
 if df is not None:
     st.write("Data Preview:")
-    st.write(df.head())
+    st.write(df)
 
     # Encode non-numeric columns
     df, label_encoders = encode_columns(df)
