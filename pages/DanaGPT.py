@@ -39,7 +39,7 @@ df = None
 if use_default_file:
     if os.path.exists(default_file_path):
         df = read_df(default_file_path)
-        st.success("Using the existing data file.")ve
+        st.success("Using the existing data file.")
     else:
         st.error(f"The file {default_file_path} does not exist.")
 else:
