@@ -13,3 +13,4 @@ tabulate
 shap
 pycaret
 matplotlib
+seaborn

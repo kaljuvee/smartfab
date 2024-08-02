@@ -9,9 +9,10 @@ from sklearn.preprocessing import LabelEncoder
 import plotly.express as px
 import shap
 import numpy as np
-from sklearn.inspection import permutation_importance
-from sklearn.feature_selection import RFE
-from sklearn.feature_selection import mutual_info_classif
+from sklearn.inspection import permutation_importance, PartialDependenceDisplay
+from sklearn.feature_selection import RFE, mutual_info_classif
+import seaborn as sns
+import matplotlib.pyplot as plt
 
 # Function to encode non-numeric columns
 def encode_columns(df):
@@ -23,12 +24,27 @@ def encode_columns(df):
             label_encoders[column] = le
     return df, label_encoders
 
-# Upload CSV
+# Streamlit app title
 st.title("Dana AI - Root Cause Analysis")
-uploaded_file = st.file_uploader("Upload your CSV file", type=["csv"])
 
-if uploaded_file is not None:
-    df = pd.read_csv(uploaded_file)
+# Option to use the prebuilt data file
+use_default_file = st.checkbox("Use the existing data file.")
+default_file_path = "data/load_df.csv"
+
+if use_default_file:
+    df = pd.read_csv(default_file_path)
+    st.success("Using the existing data file.")
+else:
+    # File uploader
+    uploaded_file = st.file_uploader("Upload your CSV file", type=["csv"])
+
+    if uploaded_file is not None:
+        df = pd.read_csv(uploaded_file)
+        st.success("CSV file uploaded successfully!")
+    else:
+        df = None
+
+if df is not None:
     st.write("Data Preview:")
     st.write(df.head())
 
@@ -100,7 +116,7 @@ if uploaded_file is not None:
             y_test = st.session_state['y_test']
             
             st.subheader("Feature Importance Analysis")
-
+            st.markdown('### 1. Built-in Feature Importance')
             # 1. Built-in Feature Importance
             if hasattr(model, 'feature_importances_'):
                 importances = model.feature_importances_
@@ -119,7 +135,7 @@ if uploaded_file is not None:
                 - Features are ranked based on their contribution to the model's predictions.
                 """)
 
-            # 2. Permutation Importance
+            st.markdown('### 2. Permutation Importance')
             perm_importance = permutation_importance(model, X_test, y_test, n_repeats=10, random_state=42)
             perm_importances = pd.DataFrame({'Feature': X_test.columns, 'Importance': perm_importance.importances_mean}).sort_values('Importance', ascending=False)
             
@@ -133,23 +149,8 @@ if uploaded_file is not None:
             - This method is model-agnostic and can capture both linear and non-linear relationships.
             - It measures the impact of each feature on model performance, not just its presence in the model.
             """)
-            # 3. Recursive Feature Elimination
-            rfe = RFE(estimator=model, n_features_to_select=1)
-            rfe.fit(X_train, y_train)
-            rfe_importances = pd.DataFrame({'Feature': X_train.columns, 'RFE Ranking': rfe.ranking_}).sort_values('RFE Ranking')
-            
-            fig = px.bar(rfe_importances, x='Feature', y='RFE Ranking', title='Recursive Feature Elimination Ranking')
-            st.plotly_chart(fig)
-            st.markdown("""
-            **Interpreting Recursive Feature Elimination (RFE) Ranking:**
-            - X-axis: Feature names
-            - Y-axis: RFE Ranking (lower is better)
-            - Features with lower ranking (shorter bars) are considered more important.
-            - RFE recursively removes features and ranks them based on when they were eliminated.
-            - Rank 1 indicates the most important feature, with higher ranks being less important.
-            - This method considers feature dependencies and can capture complex relationships.
-            """)
-            # 4. Mutual Information
+
+            st.markdown('### 3. Mutual Information')
             mi_scores = mutual_info_classif(X_train, y_train)
             mi_df = pd.DataFrame({'Feature': X_train.columns, 'Mutual Information': mi_scores}).sort_values('Mutual Information', ascending=False)
             
@@ -163,4 +164,53 @@ if uploaded_file is not None:
             - Mutual Information measures how much information the presence/absence of a feature contributes to making the correct prediction on the target variable.
             - It can capture non-linear relationships but doesn't account for feature interactions.
             - A score of 0 means the feature and target are independent, while higher scores indicate stronger relationships.
+            """)
+
+            st.markdown('### 4. Recursive Feature Elimination')
+            rfe = RFE(estimator=model, n_features_to_select=1)
+            rfe.fit(X_train, y_train)
+            rfe_importances = pd.DataFrame({'Feature': X_train.columns, 'RFE Ranking': rfe.ranking_}).sort_values('RFE Ranking')
+            
+            st.subheader("Recursive Feature Elimination (RFE) Ranking")
+            st.dataframe(rfe_importances)
+            st.markdown("""
+            **Interpreting Recursive Feature Elimination (RFE) Ranking:**
+            - X-axis: Feature names
+            - Y-axis: RFE Ranking (lower is better)
+            - Features with lower ranking (shorter bars) are considered more important.
+            - RFE recursively removes features and ranks them based on when they were eliminated.
+            - Rank 1 indicates the most important feature, with higher ranks being less important.
+            - This method considers feature dependencies and can capture complex relationships.
+            """)
+
+            # 6. Partial Dependence Plots (PDPs) and Individual Conditional Expectation (ICE) Plots
+            st.markdown('### 6. Partial Dependence Plots (PDPs) and Individual Conditional Expectation (ICE) Plots')
+            try:
+                fig, ax = plt.subplots(figsize=(12, 8))
+                display = PartialDependenceDisplay.from_estimator(model, X_train, features=[0, 1], ax=ax)  # Example: using the first two features
+                st.pyplot(fig)
+            except Exception as e:
+                st.error(f"An error occurred while generating PDPs: {e}")
+            st.markdown("""
+            **Interpreting PDPs and ICE Plots:**
+            - X-axis: Feature values
+            - Y-axis: Model prediction
+            - PDPs show the average effect of a feature on the predicted outcome.
+            - ICE plots show the effect of a feature for individual data instances.
+            - These plots help to understand feature interactions and the model's behavior for specific feature values.
+            """)
+
+            # 7. Correlation Matrix and Pairwise Plots
+            st.markdown('### 7. Correlations')
+
+            # Correlation Matrix using Plotly
+            corr_matrix = X_train.corr()
+            fig = px.imshow(corr_matrix, text_auto=True, aspect="auto", color_continuous_scale='RdBu_r')  # Using a recognized colorscale
+            fig.update_layout(title='Correlation Matrix', xaxis_title='Features', yaxis_title='Features')
+            st.plotly_chart(fig)
+            st.markdown("""
+            **Interpreting Correlation Matrix:**
+            - The heatmap shows the correlation coefficients between features.
+            - Values range from -1 to 1, where 1 indicates a perfect positive correlation, -1 indicates a perfect negative correlation, and 0 indicates no correlation.
+            - Helps identify feature groupings and potential multicollinearity issues.
             """)
