@@ -30,18 +30,26 @@ def read_df(file):
         st.error(f"Error reading the file: {e}")
         return None
 
-# Check for existing file
-existing_file_path = "data/load_df.csv"
+# Option to use the prebuilt data file
+use_default_file = st.checkbox("Use the existing data file.")
+default_file_path = "data/load_df.csv"
+
 df = None
 
-if os.path.exists(existing_file_path):
-    df = read_df(existing_file_path)
-
-# Upload CSV if no existing file is found
-if df is None:
+if use_default_file:
+    if os.path.exists(default_file_path):
+        df = read_df(default_file_path)
+        st.success("Using the existing data file.")
+    else:
+        st.error(f"The file {default_file_path} does not exist.")
+else:
+    # File uploader
     uploaded_file = st.file_uploader("Upload your CSV file", type=["csv"])
+
     if uploaded_file is not None:
         df = read_df(uploaded_file)
+        if df is not None:
+            st.success("CSV file uploaded successfully!")
 
 if df is not None:
     st.write("Data Preview:")
